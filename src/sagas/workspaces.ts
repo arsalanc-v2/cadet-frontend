@@ -1,4 +1,4 @@
-import { Context, interrupt, resume, runInContext } from 'js-slang';
+import { Context, interrupt, resume, runInContext, Result } from 'js-slang';
 import { InterruptedError } from 'js-slang/dist/interpreter-errors';
 import { manualToggleDebugger } from 'js-slang/dist/stdlib/inspector';
 import { random } from 'lodash';
@@ -409,6 +409,7 @@ export default function* workspaceSaga(): SagaIterator {
 }
 
 let lastDebuggerResult: any;
+let lastNonDetResult: Result;
 function* updateInspector(workspaceLocation: WorkspaceLocation) {
   try {
     const start = lastDebuggerResult.context.runtime.nodes[0].loc.start.line - 1;
@@ -494,21 +495,28 @@ export function* evalCode(
     }
   }
 
+  const isNonDet: boolean = context.chapter === 4.3;
+  if (isNonDet) {
+    context.executionMethod = 'non-det-interpreter';
+  }
+
   const { result, interrupted, paused } = yield race({
     result:
-      actionType === actionTypes.DEBUG_RESUME
+      actionType === actionTypes.DEBUG_RESUME 
         ? call(resume, lastDebuggerResult)
+      : code === 'try_again;'
+        ? call(resume, lastNonDetResult)
         : call(runInContext, code, context, {
-            scheduler: 'preemptive',
-            originalMaxExecTime: execTime,
-            useSubst: substActiveAndCorrectChapter
-          }),
+          scheduler: 'preemptive',
+          originalMaxExecTime: execTime,
+          useSubst: substActiveAndCorrectChapter
+        }),
     /**
      * A BEGIN_INTERRUPT_EXECUTION signals the beginning of an interruption,
      * i.e the trigger for the interpreter to interrupt execution.
      */
     interrupted: take(actionTypes.BEGIN_INTERRUPT_EXECUTION),
-    paused: take(actionTypes.BEGIN_DEBUG_PAUSE)
+    paused: take(actionTypes.BEGIN_DEBUG_PAUSE),
   });
 
   if (interrupted) {
@@ -534,14 +542,17 @@ export function* evalCode(
   }
   yield updateInspector(workspaceLocation);
 
-  if (result.status !== 'suspended' && result.status !== 'finished') {
+  if (result.status !== 'suspended' && result.status !== 'finished' && result.status !== 'suspended-non-det') {
     yield put(actions.evalInterpreterError(context.errors, workspaceLocation));
     return;
   } else if (result.status === 'suspended') {
     yield put(actions.endDebuggerPause(workspaceLocation));
     yield put(actions.evalInterpreterSuccess('Breakpoint hit!', workspaceLocation));
     return;
+  } else if (isNonDet) {
+    lastNonDetResult = result;
   }
+
   // Do not write interpreter output to REPL, if executing chunks (e.g. prepend/postpend blocks)
   if (actionType !== actionTypes.EVAL_SILENT) {
     yield put(actions.evalInterpreterSuccess(result.value, workspaceLocation));
