@@ -556,6 +556,9 @@ export function* evalCode(
     yield put(actions.evalInterpreterSuccess('Breakpoint hit!', workspaceLocation));
     return;
   } else if (isNonDet) {
+    if (result.value === 'cut') {
+      result.value = undefined;
+    }
     lastNonDetResult = result;
   }
 
