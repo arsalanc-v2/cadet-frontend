@@ -1,4 +1,4 @@
-import { Context, interrupt, resume, runInContext, Result } from 'js-slang';
+import { Context, interrupt, Result, resume, runInContext } from 'js-slang';
 import { InterruptedError } from 'js-slang/dist/interpreter-errors';
 import { manualToggleDebugger } from 'js-slang/dist/stdlib/inspector';
 import { random } from 'lodash';
@@ -502,21 +502,21 @@ export function* evalCode(
 
   const { result, interrupted, paused } = yield race({
     result:
-      actionType === actionTypes.DEBUG_RESUME 
+      actionType === actionTypes.DEBUG_RESUME
         ? call(resume, lastDebuggerResult)
-      : code === 'try_again;'
+        : code === 'try_again;'
         ? call(resume, lastNonDetResult)
         : call(runInContext, code, context, {
-          scheduler: 'preemptive',
-          originalMaxExecTime: execTime,
-          useSubst: substActiveAndCorrectChapter
-        }),
+            scheduler: 'preemptive',
+            originalMaxExecTime: execTime,
+            useSubst: substActiveAndCorrectChapter
+          }),
     /**
      * A BEGIN_INTERRUPT_EXECUTION signals the beginning of an interruption,
      * i.e the trigger for the interpreter to interrupt execution.
      */
     interrupted: take(actionTypes.BEGIN_INTERRUPT_EXECUTION),
-    paused: take(actionTypes.BEGIN_DEBUG_PAUSE),
+    paused: take(actionTypes.BEGIN_DEBUG_PAUSE)
   });
 
   if (interrupted) {
@@ -542,7 +542,11 @@ export function* evalCode(
   }
   yield updateInspector(workspaceLocation);
 
-  if (result.status !== 'suspended' && result.status !== 'finished' && result.status !== 'suspended-non-det') {
+  if (
+    result.status !== 'suspended' &&
+    result.status !== 'finished' &&
+    result.status !== 'suspended-non-det'
+  ) {
     yield put(actions.evalInterpreterError(context.errors, workspaceLocation));
     return;
   } else if (result.status === 'suspended') {
