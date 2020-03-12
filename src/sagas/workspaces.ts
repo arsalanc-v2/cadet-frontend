@@ -506,6 +506,8 @@ export function* evalCode(
         ? call(resume, lastDebuggerResult)
         : code === 'try_again;'
         ? call(resume, lastNonDetResult)
+        : code.includes('try_again') // defensive check: try_again should only be used on its own
+        ? { status: 'error' }
         : call(runInContext, code, context, {
             scheduler: 'preemptive',
             originalMaxExecTime: execTime,
