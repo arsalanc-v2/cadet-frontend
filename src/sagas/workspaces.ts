@@ -501,17 +501,17 @@ export function* evalCode(
     result:
       actionType === actionTypes.DEBUG_RESUME
         ? call(resume, lastDebuggerResult)
-        : code.trim() === TRY_AGAIN
-        ? call(resume, lastNonDetResult)
-        : code.includes(TRY_AGAIN) // defensive check: try_again should only be used on its own
-        ? { status: 'error' }
         : isNonDet
-        ? call(runInContext, code, context, {
-            scheduler: 'non-det',
-            executionMethod: 'interpreter',
-            originalMaxExecTime: execTime,
-            useSubst: substActiveAndCorrectChapter
-          })
+        ? code.trim() === TRY_AGAIN
+          ? call(resume, lastNonDetResult)
+          : code.includes(TRY_AGAIN) // defensive check: try_again should only be used on its own
+          ? { status: 'error' }
+          : call(runInContext, code, context, {
+              scheduler: 'non-det',
+              executionMethod: 'interpreter',
+              originalMaxExecTime: execTime,
+              useSubst: substActiveAndCorrectChapter
+            })
         : call(runInContext, code, context, {
             scheduler: 'preemptive',
             originalMaxExecTime: execTime,
