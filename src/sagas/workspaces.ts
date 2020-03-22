@@ -1,4 +1,5 @@
 import { Context, interrupt, Result, resume, runInContext } from 'js-slang';
+import { TRY_AGAIN } from 'js-slang/dist/constants';
 import { InterruptedError } from 'js-slang/dist/interpreter-errors';
 import { manualToggleDebugger } from 'js-slang/dist/stdlib/inspector';
 import { random } from 'lodash';
@@ -496,23 +497,27 @@ export function* evalCode(
   }
 
   const isNonDet: boolean = context.chapter === 4.3;
-  if (isNonDet) {
-    context.executionMethod = 'non-det-interpreter';
-  }
-
   const { result, interrupted, paused } = yield race({
     result:
       actionType === actionTypes.DEBUG_RESUME
         ? call(resume, lastDebuggerResult)
-        : code === 'try_again;'
+        : code.trim() === TRY_AGAIN
         ? call(resume, lastNonDetResult)
-        : code.includes('try_again') // defensive check: try_again should only be used on its own
+        : code.includes(TRY_AGAIN) // defensive check: try_again should only be used on its own
         ? { status: 'error' }
+        : isNonDet
+        ? call(runInContext, code, context, {
+            scheduler: 'non-det',
+            executionMethod: 'interpreter',
+            originalMaxExecTime: execTime,
+            useSubst: substActiveAndCorrectChapter
+          })
         : call(runInContext, code, context, {
             scheduler: 'preemptive',
             originalMaxExecTime: execTime,
             useSubst: substActiveAndCorrectChapter
           }),
+
     /**
      * A BEGIN_INTERRUPT_EXECUTION signals the beginning of an interruption,
      * i.e the trigger for the interpreter to interrupt execution.
