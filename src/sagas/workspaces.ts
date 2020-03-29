@@ -504,7 +504,7 @@ export function* evalCode(
         : isNonDet
         ? code.trim() === TRY_AGAIN
           ? call(resume, lastNonDetResult)
-          : code.includes(TRY_AGAIN) // defensive check: try_again should only be used on its own
+          : code.includes(TRY_AGAIN) // defensive check: try-again should only be used on its own
           ? { status: 'error' }
           : call(runInContext, code, context, {
               scheduler: 'non-det',
