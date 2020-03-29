@@ -1,10 +1,10 @@
 import * as React from 'react';
-import AceEditor, { Annotation } from 'react-ace';
+import AceEditor, { IAnnotation } from 'react-ace';
 import { HotKeys } from 'react-hotkeys';
 import sharedbAce from 'sharedb-ace';
 
-import 'brace/ext/language_tools';
-import 'brace/ext/searchbox';
+import 'ace-builds/src-noconflict/ext-language_tools';
+import 'ace-builds/src-noconflict/ext-searchbox';
 import { HighlightRulesSelector, ModeSelector } from 'js-slang/dist/editors/ace/modes/source';
 import 'js-slang/dist/editors/ace/theme/source';
 import { LINKS } from '../../utils/constants';
@@ -24,9 +24,11 @@ export interface IEditorProps {
   editorValue: string;
   highlightedLines: number[][];
   isEditorAutorun: boolean;
+  newCursorPosition?: IPosition;
   sharedbAceInitValue?: string;
   sharedbAceIsInviting?: boolean;
   sourceChapter?: number;
+  handleDeclarationNavigate: (cursorPosition: IPosition) => void;
   handleEditorEval: () => void;
   handleEditorValueChange: (newCode: string) => void;
   handleEditorUpdateBreakpoints: (breakpoints: string[]) => void;
@@ -35,11 +37,16 @@ export interface IEditorProps {
   handleUpdateHasUnsavedChanges?: (hasUnsavedChanges: boolean) => void;
 }
 
+export interface IPosition {
+  row: number;
+  column: number;
+}
+
 class Editor extends React.PureComponent<IEditorProps, {}> {
   public ShareAce: any;
   public AceEditor: React.RefObject<AceEditor>;
   private onChangeMethod: (newCode: string) => void;
-  private onValidateMethod: (annotations: Annotation[]) => void;
+  private onValidateMethod: (annotations: IAnnotation[]) => void;
 
   constructor(props: IEditorProps) {
     super(props);
@@ -51,7 +58,7 @@ class Editor extends React.PureComponent<IEditorProps, {}> {
       }
       this.props.handleEditorValueChange(newCode);
     };
-    this.onValidateMethod = (annotations: Annotation[]) => {
+    this.onValidateMethod = (annotations: IAnnotation[]) => {
       if (this.props.isEditorAutorun && annotations.length === 0) {
         this.props.handleEditorEval();
       }
@@ -119,6 +126,13 @@ class Editor extends React.PureComponent<IEditorProps, {}> {
     this.ShareAce = null;
   }
 
+  public componentDidUpdate(prevProps: IEditorProps) {
+    const newCursorPosition = this.props.newCursorPosition;
+    if (newCursorPosition && newCursorPosition !== prevProps.newCursorPosition) {
+      this.moveCursor(newCursorPosition);
+    }
+  }
+
   public getMarkers = () => {
     const markerProps = [];
     for (const lineNum of this.props.highlightedLines) {
@@ -159,6 +173,14 @@ class Editor extends React.PureComponent<IEditorProps, {}> {
                   mac: 'Shift-Enter'
                 },
                 exec: this.props.handleEditorEval
+              },
+              {
+                name: 'navigate',
+                bindKey: {
+                  win: 'Ctrl-B',
+                  mac: 'Command-B'
+                },
+                exec: this.handleNavigate
               }
             ]}
             editorProps={{
@@ -183,6 +205,30 @@ class Editor extends React.PureComponent<IEditorProps, {}> {
       </HotKeys>
     );
   }
+
+  // Used in navigating from occurence to navigation
+  private moveCursor = (position: IPosition) => {
+    (this.AceEditor.current as any).editor.selection.clearSelection();
+    (this.AceEditor.current as any).editor.moveCursorToPosition(position);
+    (this.AceEditor.current as any).editor.renderer.$cursorLayer.showCursor();
+    (this.AceEditor.current as any).editor.renderer.scrollCursorIntoView(position, 0.5);
+  };
+
+  private handleNavigate = () => {
+    const chapter = this.props.sourceChapter;
+    const pos = (this.AceEditor.current as any).editor.selection.getCursor();
+    const token = (this.AceEditor.current as any).editor.session.getTokenAt(pos.row, pos.column);
+    const url = LINKS.TEXTBOOK;
+    if (token !== null && /\bsupport.function\b/.test(token.type)) {
+      window.open(`${url}/source/source_${chapter}/global.html#${token.value}`); // opens the link
+    } else if (token !== null && /\bstorage.type\b/.test(token.type)) {
+      window.open(`${url}/source/source_${chapter}.pdf`);
+    } else {
+      this.props.handleDeclarationNavigate(
+        (this.AceEditor.current as any).editor.getCursorPosition()
+      );
+    }
+  };
 
   private handleGutterClick = (e: any) => {
     const target = e.domEvent.target;
